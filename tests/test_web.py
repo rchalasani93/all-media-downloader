@@ -349,3 +349,11 @@ def test_sniffs_media_type_from_bytes():
     assert fastsaver.sniff_ext(b"RIFF\x00\x00\x00\x00WEBPVP8 ") == "webp"
     assert fastsaver.sniff_ext(b"\x00\x00\x00\x18ftypmp42") == "mp4"
     assert fastsaver.sniff_ext(b"<html><script>") is None
+
+
+def test_key_shape_never_reveals_key(monkeypatch):
+    monkeypatch.setattr(fastsaver, "API_KEY", "fs_sk_supersecretvalue123")
+    shape = fastsaver.key_shape()
+    assert "supersecret" not in shape and "25 characters" in shape and "starts with fs_sk_" in shape
+    monkeypatch.setattr(fastsaver, "API_KEY", "abc def")
+    assert "does NOT start" in fastsaver.key_shape() and "spaces" in fastsaver.key_shape()

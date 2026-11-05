@@ -17,7 +17,7 @@ import urllib.request
 from pathlib import Path
 
 API_BASE = "https://api.fastsaver.io/v1"
-API_KEY = os.environ.get("FASTSAVER_API_KEY", "").strip()
+API_KEY = os.environ.get("FASTSAVER_API_KEY", "").strip().strip("\"'").strip()
 RPM = max(1, int(os.environ.get("FASTSAVER_RPM", "10")))  # free plan: 10 requests/minute
 MAX_FILE_BYTES = int(os.environ.get("MAX_MB_PER_FILE", "300")) * 1024 * 1024
 TIMEOUT = 60
@@ -33,6 +33,15 @@ class FastSaverError(Exception):
     def __init__(self, message: str, fatal: bool = False):
         super().__init__(message)
         self.fatal = fatal  # True when retrying other links is pointless (bad key, no credits)
+
+
+def key_shape() -> str:
+    """Describe the configured key without revealing it."""
+    k = API_KEY
+    parts = [f"{len(k)} characters", "starts with fs_sk_" if k.startswith("fs_sk_") else "does NOT start with fs_sk_"]
+    if any(c.isspace() for c in k):
+        parts.append("contains spaces")
+    return ", ".join(parts)
 
 
 def enabled() -> bool:
@@ -211,7 +220,8 @@ def fetch(post_url: str) -> dict:
             time.sleep(delay)
             continue
         if status == 401:
-            raise FastSaverError("FastSaver didn't accept the API key. Check FASTSAVER_API_KEY on Render.", fatal=True)
+            raise FastSaverError(f"FastSaver didn't accept the API key ({key_shape()}). "
+                                 "Copy the key again from your FastSaver dashboard into FASTSAVER_API_KEY on Render.", fatal=True)
         if isinstance(body, dict) and body.get("ok") is True:
             return body
         detail = body.get("detail") if isinstance(body, dict) else None
