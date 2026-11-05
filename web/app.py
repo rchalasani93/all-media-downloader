@@ -31,6 +31,8 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+import fastsaver
+
 # ---------- configuration (all from environment) ----------
 
 APP_ENV = os.environ.get("APP_ENV", "production")  # production | local
@@ -59,6 +61,7 @@ if LOCAL:
 
 IMAGE_EXT = ("jpg", "jpeg", "png", "webp", "gif", "avif", "heic")  # no svg: it can carry script
 MAX_URL_LEN = 500
+MAX_LINKS = 50  # post links per download
 LOG_LINES = 300
 # Sites that block servers. Explain instead of failing slowly.
 EXTENSION_ONLY = {"instagram", "twitter", "facebook", "threads", "tiktok"}
@@ -84,14 +87,15 @@ jobs_lock = threading.Lock()
 
 
 class Job:
-    def __init__(self, owner: str, url: str, limit: int, images_only: bool):
+    def __init__(self, owner: str, urls: list[str], limit: int, images_only: bool):
         self.id = uuid.uuid4().hex
         self.owner = owner
-        self.url = url
+        self.urls = urls
+        self.url = urls[0] if len(urls) == 1 else f"{len(urls)} links"
         self.limit = limit
         self.images_only = images_only
         self.dir = DOWNLOAD_ROOT / self.id
-        self.label = folder_name(url)
+        self.label = folder_name(urls[0]) if len(urls) == 1 else f"posts_{time.strftime('%Y%m%d-%H%M')}"
         self.state = "running"  # running | done | failed | cancelled
         self.log: list[str] = []
         self.started = time.time()
@@ -165,17 +169,46 @@ def validate_url(raw: object) -> str:
         raise ValueError("That doesn't look like a web link.")
     if p.username or p.password:
         raise ValueError("Links with a username or password in them aren't allowed.")
-    category = extractor_category(url)
-    if category in (None, "directlink", "generic", "noop", "recursive"):
-        raise ValueError("That site or link type isn't supported. Use the profile's main page.")
-    if category in EXTENSION_ONLY:
-        raise ValueError("This site blocks servers. Use the Chrome extension for it.")
+    if fastsaver.post_site(url):
+        if not fastsaver.enabled():
+            raise ValueError("Single Instagram, X, TikTok and Facebook posts need FASTSAVER_API_KEY set on the server.")
+    else:
+        category = extractor_category(url)
+        if category in (None, "directlink", "generic", "noop", "recursive"):
+            raise ValueError("That site or link type isn't supported.")
+        if category in EXTENSION_ONLY:
+            raise ValueError("Whole profiles on this site need the Chrome extension. Single post links work here.")
     if not is_public_host(p.hostname):
         raise ValueError("That address isn't allowed.")
     return url
 
 
-def build_command(job: Job) -> list[str]:
+def validate_links(raw: object) -> list[str]:
+    """One profile link, or up to MAX_LINKS post links (one per line)."""
+    if isinstance(raw, list):
+        lines = raw
+    elif isinstance(raw, str):
+        lines = raw.splitlines()
+    else:
+        raise ValueError("Paste a profile or post link.")
+    lines = [l.strip() for l in lines if isinstance(l, str) and l.strip()]
+    if not lines:
+        raise ValueError("Paste a profile or post link.")
+    if len(lines) > MAX_LINKS:
+        raise ValueError(f"Up to {MAX_LINKS} links at a time.")
+    urls, seen = [], set()
+    for n, line in enumerate(lines, 1):
+        try:
+            url = validate_url(line)
+        except ValueError as e:
+            raise ValueError(f"Line {n}: {e}" if len(lines) > 1 else str(e)) from None
+        if url not in seen:
+            seen.add(url)
+            urls.append(url)
+    return urls
+
+
+def build_command(job: Job, url: str | None = None, remaining: int | None = None) -> list[str]:
     # Argument list, never a shell string. "--" ends options so the URL can't add flags.
     cmd = [
         sys.executable, "-m", "gallery_dl",
@@ -183,44 +216,108 @@ def build_command(job: Job) -> list[str]:
         "--sleep-request", "1.0-2.5",
         "--retries", "3",
         "--no-colors",
-        "--range", f"1-{job.limit}",
+        "--range", f"1-{remaining if remaining is not None else job.limit}",
     ]
     if job.images_only:
         cmd += ["--filter", f"extension in {IMAGE_EXT!r}"]
-    cmd += ["--", job.url]
+    cmd += ["--", url or job.urls[0]]
     return cmd
+
+
+def add_log(job: Job, line: str) -> None:
+    job.log.append(line[:400])
+    del job.log[:-LOG_LINES]
+
+
+def dir_bytes(job: Job) -> int:
+    return sum(p.stat().st_size for p in job.files())
+
+
+def run_gallery_dl(job: Job, url: str, remaining: int) -> int:
+    """Download one link with gallery-dl. Returns the process exit code."""
+    total = dir_bytes(job)
+    job.proc = subprocess.Popen(
+        build_command(job, url, remaining), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        stdin=subprocess.DEVNULL, text=True, encoding="utf-8", errors="replace", bufsize=1,
+    )
+    assert job.proc.stdout
+    for line in job.proc.stdout:
+        line = line.rstrip()
+        if not line:
+            continue
+        if line.startswith(str(job.dir)):
+            p = Path(line)
+            line = "saved  " + p.name
+            total += p.stat().st_size if p.exists() else 0
+            if total > MAX_BYTES:
+                job.proc.terminate()
+                add_log(job, f"Stopped at the {MAX_BYTES // 1024 // 1024} MB limit for one download.")
+        elif line.startswith("# " + str(job.dir)):
+            line = "exists " + Path(line[2:]).name
+        add_log(job, line)
+    return job.proc.wait()
+
+
+def run_fastsaver(job: Job, url: str, index: int, remaining: int) -> int:
+    """Download one post through FastSaver. Returns the number of files saved."""
+    body = fastsaver.fetch(url)
+    media, skipped = fastsaver.media_from(body, job.images_only)
+    post_id = re.sub(r"[^A-Za-z0-9_-]+", "", str(body.get("id") or ""))[:40] or f"post{index}"
+    site = re.sub(r"[^a-z0-9]+", "", str(body.get("source") or "post").split(".")[0].lower())[:20] or "post"
+    saved = 0
+    for n, (_kind, media_url) in enumerate(media[:remaining], 1):
+        if job.state != "running":
+            break
+        if dir_bytes(job) > MAX_BYTES:
+            add_log(job, f"Stopped at the {MAX_BYTES // 1024 // 1024} MB limit for one download.")
+            break
+        stem = job.dir / f"{index:03d}_{site}_{post_id}" if len(media) == 1 else job.dir / f"{index:03d}_{site}_{post_id}_{n:02d}"
+        try:
+            out = fastsaver.download(media_url, stem)
+            add_log(job, "saved  " + out.name)
+            saved += 1
+        except fastsaver.FastSaverError as e:
+            add_log(job, f"[post {index}] {e}")
+    if skipped:
+        add_log(job, f"[post {index}] skipped {skipped} video(s) (Photos only is on)")
+    if not media and not skipped:
+        add_log(job, f"[post {index}] no media found in that post")
+    return saved
 
 
 def run_job(job: Job) -> None:
     job.dir.mkdir(parents=True, exist_ok=True)
-    total = 0
+    failures = 0
     try:
-        job.proc = subprocess.Popen(
-            build_command(job), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            stdin=subprocess.DEVNULL, text=True, encoding="utf-8", errors="replace", bufsize=1,
-        )
-        assert job.proc.stdout
-        for line in job.proc.stdout:
-            line = line.rstrip()
-            if not line:
-                continue
-            if line.startswith(str(job.dir)):
-                p = Path(line)
-                line = "saved  " + p.name
-                total += p.stat().st_size if p.exists() else 0
-                if total > MAX_BYTES:
-                    job.proc.terminate()
-                    job.log.append(f"Stopped at the {MAX_BYTES // 1024 // 1024} MB limit for one download.")
-            elif line.startswith("# " + str(job.dir)):
-                line = "exists " + Path(line[2:]).name
-            job.log.append(line[:400])
-            del job.log[:-LOG_LINES]
-        code = job.proc.wait()
+        for index, url in enumerate(job.urls, 1):
+            if job.state != "running":
+                break
+            remaining = job.limit - len(job.files())
+            if remaining <= 0:
+                add_log(job, f"Reached the {job.limit}-file limit.")
+                break
+            if len(job.urls) > 1:
+                add_log(job, f"[{index}/{len(job.urls)}] {url}")
+            if fastsaver.post_site(url):
+                try:
+                    if run_fastsaver(job, url, index, remaining) == 0:
+                        failures += 1
+                except fastsaver.FastSaverError as e:
+                    failures += 1
+                    add_log(job, f"[post {index}] {e}")
+                    if e.fatal:
+                        add_log(job, "Stopped: the remaining post links would fail the same way.")
+                        break
+            else:
+                if run_gallery_dl(job, url, remaining) != 0:
+                    failures += 1
         if job.state == "running":
-            job.state = "done" if (code == 0 or job.files()) else "failed"
+            job.state = "done" if job.files() else "failed"
+            if failures and job.files():
+                add_log(job, f"Finished. {failures} of {len(job.urls)} link(s) had problems; see above.")
     except Exception as exc:
         job.state = "failed"
-        job.log.append("Unexpected server error.")
+        add_log(job, "Unexpected server error.")
         log.exception("job %s failed: %s", job.id, exc)
     finally:
         job.finished = time.time()
@@ -353,8 +450,8 @@ def logout():
 
 @app.get("/")
 def index():
-    return render_template("index.html", csrf=csrf_token(), env=ENV_LABEL,
-                           ttl=JOB_TTL // 60, max_files=MAX_FILES)
+    return render_template("index.html", csrf=csrf_token(), env=ENV_LABEL, ttl=JOB_TTL // 60,
+                           max_files=MAX_FILES, max_links=MAX_LINKS, posts_enabled=fastsaver.enabled())
 
 
 @app.post("/api/jobs")
@@ -364,7 +461,7 @@ def start_job():
     if not isinstance(data, dict):
         abort(400, "Send JSON.")
     try:
-        url = validate_url(data.get("url"))
+        urls = validate_links(data.get("links", data.get("url")))
     except ValueError as e:
         abort(400, str(e))
     limit = data.get("limit")
@@ -382,7 +479,7 @@ def start_job():
     with jobs_lock:
         if any(j.state == "running" for j in jobs.values()):
             abort(409, "Another download is running. Try again when it finishes.")
-        job = Job(owner_id(), url, limit, images_only)
+        job = Job(owner_id(), urls, limit, images_only)
         jobs[job.id] = job
     threading.Thread(target=run_job, args=(job,), daemon=True).start()
     return jsonify(job.public()), 201
@@ -402,9 +499,10 @@ def job_status(job_id):
 @app.post("/api/jobs/<job_id>/cancel")
 def cancel_job(job_id):
     job = get_job(job_id)
-    if job.state == "running" and job.proc:
+    if job.state == "running":
         job.state = "cancelled"
-        job.proc.terminate()
+        if job.proc and job.proc.poll() is None:
+            job.proc.terminate()
         job.log.append("Stopped. Files saved so far are kept.")
     return jsonify(job.public())
 

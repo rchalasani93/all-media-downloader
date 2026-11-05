@@ -20,19 +20,23 @@
           <button type="submit" class="link">Sign out</button>
         </form>
       </div>
-      <p>Paste a profile link and the server saves every photo on it, then hands you a ZIP.
-         Works with Reddit, Tumblr, Pinterest, Flickr, Imgur, DeviantArt and
-         <a href="https://github.com/mikf/gallery-dl/blob/master/docs/supportedsites.md" target="_blank" rel="noopener noreferrer">many more sites</a>.
-         For Instagram and X, use the <a href="https://rchalasani93.github.io/all-media-downloader/dev/#extension" target="_blank" rel="noopener noreferrer">Chrome extension</a>.</p>
+      <p>Paste a profile link to save every photo on it, or post links to save just those posts. You get a ZIP.</p>
+      <table class="support">
+        <tr><th>Whole profiles</th><td>Reddit, Tumblr, Pinterest, Flickr, Imgur, DeviantArt and
+          <a href="https://github.com/mikf/gallery-dl/blob/master/docs/supportedsites.md" target="_blank" rel="noopener noreferrer">many more</a>.
+          For Instagram and X profiles, use the <a href="https://rchalasani93.github.io/all-media-downloader/dev/#extension" target="_blank" rel="noopener noreferrer">Chrome extension</a>.</td></tr>
+        <tr><th>Single posts</th><td>All of the above, plus Instagram, X, TikTok and Facebook{% if not posts_enabled %} (not set up on this server yet){% endif %}.</td></tr>
+      </table>
     </header>
 
     <form id="job-form" class="sheet" autocomplete="off" novalidate>
-      <label for="url" class="lead">Profile link</label>
+      <label for="url" class="lead">Profile or post links</label>
       <div class="url-row">
-        <input id="url" name="url" type="text" inputmode="url" spellcheck="false"
-               placeholder="https://www.reddit.com/user/someone/submitted/" maxlength="500" required>
+        <textarea id="url" name="links" rows="3" spellcheck="false" autocapitalize="off" required
+                  placeholder="https://www.reddit.com/user/someone/submitted/&#10;or post links, one per line:&#10;https://www.instagram.com/p/ABC123/"></textarea>
         <button type="submit" id="start">Download photos</button>
       </div>
+      <p class="hint" id="link-count">One profile link, or up to {{ max_links }} post links, one per line.</p>
       <p class="error" id="form-error" role="alert" hidden></p>
 
       <div class="options">

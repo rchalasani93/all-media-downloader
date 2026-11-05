@@ -47,11 +47,14 @@ async function init() {
     $("target").textContent = name;
     $("go").disabled = true;
   } else {
-    $("target").textContent = `${name}: ${target.profile}`;
+    $("target").textContent = target.mode === "post"
+      ? `${name}: this post`
+      : `${name}: ${target.profile}`;
   }
   $("hint").textContent = target.hint || "";
   $("hint").hidden = !target.hint;
   $("minutes-row").hidden = target.mode !== "scroll";
+  $("limit").closest(".row").hidden = target.mode === "post";
 
   const { job } = await chrome.storage.session.get("job");
   render(job);

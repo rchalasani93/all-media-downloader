@@ -180,3 +180,17 @@ button.link:hover { background: none; color: var(--accent); }
 .note { font-size: 14px; color: var(--ink-2); }
 .options { grid-template-columns: 1fr 1fr; }
 .check { grid-column: auto; align-self: end; padding-bottom: 10px; }
+
+/* Per-post support */
+.support { border-collapse: collapse; margin: 0 0 28px; font-size: 15px; max-width: 64ch; }
+.support th { text-align: left; vertical-align: top; padding: 6px 16px 6px 0; white-space: nowrap; font-weight: 600; }
+.support td { padding: 6px 0; color: var(--ink-2); }
+.masthead p { margin-bottom: 16px; }
+textarea#url {
+  font: 14px/1.5 var(--mono); color: var(--ink); background: #fff;
+  border: 1px solid var(--line); border-radius: 3px; padding: 10px 12px;
+  flex: 1; min-width: 0; resize: vertical; min-height: 76px;
+}
+textarea#url:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.url-row { align-items: flex-start; }
+.hint { font-size: 13px; color: var(--ink-2); margin: 6px 0 0; }

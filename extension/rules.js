@@ -14,6 +14,11 @@
     const parts = u.pathname.split("/").filter(Boolean);
 
     if (host === "instagram.com") {
+      const postIdx = parts.findIndex((x) => ["p", "reel", "reels", "tv"].includes(x.toLowerCase()));
+      if (postIdx >= 0 && parts[postIdx + 1] && postIdx <= 1) {
+        const code = parts[postIdx + 1];
+        return { site: "instagram", profile: "post-" + code, mode: "post", code };
+      }
       if (parts[0] && !IG_RESERVED.has(parts[0].toLowerCase())) {
         return { site: "instagram", profile: parts[0], mode: "api" };
       }
@@ -21,6 +26,11 @@
     }
     if (host === "reddit.com" || host === "old.reddit.com" || host === "new.reddit.com") {
       const kind = (parts[0] || "").toLowerCase();
+      const cIdx = parts.findIndex((x) => x === "comments");
+      if (cIdx >= 0 && /^[a-z0-9]+$/i.test(parts[cIdx + 1] || "")) {
+        const id = parts[cIdx + 1];
+        return { site: "reddit", profile: "post-" + id, mode: "post", api: `/comments/${id}.json` };
+      }
       if ((kind === "user" || kind === "u") && parts[1]) {
         return { site: "reddit", profile: parts[1], mode: "api", api: `/user/${encodeURIComponent(parts[1])}/submitted.json` };
       }
@@ -30,6 +40,9 @@
       return { site: "reddit", mode: "none", hint: "Open a user or subreddit page" };
     }
     if (host === "x.com" || host === "twitter.com" || host === "mobile.twitter.com") {
+      if (parts[0] && parts[1] === "status" && /^\d+$/.test(parts[2] || "")) {
+        return { site: "x", profile: `${parts[0]}-${parts[2]}`, mode: "post", statusId: parts[2] };
+      }
       if (parts[0] && !X_RESERVED.has(parts[0].toLowerCase())) {
         const onMedia = parts[1] === "media";
         return {

@@ -240,13 +240,70 @@
     if (Date.now() >= deadline) report([], "Reached the scroll time limit.");
   }
 
+  // ---------- single posts ----------
+
+  function ogImage() {
+    const m = document.querySelector('meta[property="og:image"]');
+    return m && m.content ? m.content : null;
+  }
+
+  async function instagramPost(target, opts) {
+    const id = R.shortcodeToId(target.code);
+    const r = id ? await igGet(`/api/v1/media/${id}/info/`) : { status: 0, ok: false };
+    if (r.ok && r.body.items && r.body.items[0]) {
+      const urls = R.instagramItemUrls(r.body.items[0], opts.imagesOnly);
+      if (urls.length) { report(urls.map((url) => ({ url, fallback: null }))); return; }
+    }
+    // Fallback: the image(s) shown on the post page, then the preview image.
+    const imgs = [...document.querySelectorAll("main article img, main img")]
+      .filter((img) => Math.max(img.naturalWidth, img.width) >= 300)
+      .map((img) => biggestSrc(img)).filter(Boolean);
+    const urls = imgs.length ? imgs : [ogImage()].filter(Boolean);
+    if (!urls.length) throw new Error(`Couldn't read this post (post info ${r.status}). Make sure you're logged in.`);
+    report([...new Set(urls)].map((url) => ({ url, fallback: null })), `Post info ${r.status}; saved the images shown on the page`);
+  }
+
+  async function redditPost(target, opts) {
+    const res = await fetch(`${target.api}?raw_json=1`, { credentials: "include" });
+    if (!res.ok) throw new Error(`Reddit answered ${res.status}.`);
+    const data = await res.json();
+    const post = data && data[0] && data[0].data && data[0].data.children && data[0].data.children[0];
+    const urls = R.redditPostUrls(post, opts.imagesOnly);
+    if (!urls.length) throw new Error("This post has no images.");
+    report(urls.map((url) => ({ url, fallback: null })));
+  }
+
+  async function xPost(target) {
+    // The main post is the article that links to its own status id.
+    for (let i = 0; i < 20; i++) {
+      const article = [...document.querySelectorAll("article")]
+        .find((a) => a.querySelector(`a[href*="/status/${target.statusId}"]`));
+      if (article) {
+        const urls = [...article.querySelectorAll('img[src*="pbs.twimg.com/media/"]')]
+          .map((img) => R.upgrade(img.currentSrc || img.src)).filter(Boolean);
+        if (urls.length) { report(urls); return; }
+      }
+      await sleep(500);
+    }
+    throw new Error("No photos found in this post. Videos aren't saved from X posts.");
+  }
+
+  async function post(target, opts) {
+    if (target.site === "instagram") return instagramPost(target, opts);
+    if (target.site === "reddit") return redditPost(target, opts);
+    if (target.site === "x") return xPost(target, opts);
+    throw new Error("Single posts aren't supported on this site.");
+  }
+
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type === "amd-stop") stopped = true;
     if (msg.type !== "amd-start") return;
     stopped = false;
     seen.clear();
     const target = R.detect(location.href);
-    const run = target.mode === "api" ? (target.site === "instagram" ? instagram : reddit) : scroll;
+    const run = target.mode === "post" ? post
+      : target.mode === "api" ? (target.site === "instagram" ? instagram : reddit)
+      : scroll;
     run(target, msg.options)
       .then(() => send({ type: "amd-collect-done" }))
       .catch((e) => send({ type: "amd-collect-done", error: String(e.message || e) }));

@@ -11,6 +11,8 @@ os.environ.update(APP_ENV="local", ACCESS_PASSWORD="correct-horse-battery", SECR
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "web"))
 import app as appmod  # noqa: E402
 
+real_run_job = appmod.run_job
+
 BASE = "http://127.0.0.1:8765"
 PASSWORD = "correct-horse-battery"
 
@@ -148,7 +150,7 @@ def test_ssrf_guard_blocks_private_addresses(monkeypatch):
 
 
 def test_command_is_an_argument_list():
-    job = appmod.Job("owner", "https://www.reddit.com/user/x;whoami/", 5, True)
+    job = appmod.Job("owner", ["https://www.reddit.com/user/x;whoami/"], 5, True)
     cmd = appmod.build_command(job)
     assert cmd[-2:] == ["--", "https://www.reddit.com/user/x;whoami/"]
     assert "1-5" in cmd
@@ -207,3 +209,126 @@ def test_login_form_post_with_same_origin_header_works():
 def test_referrer_policy_keeps_origin_on_forms():
     r = appmod.app.test_client().get("/login", base_url=BASE)
     assert r.headers["Referrer-Policy"] == "same-origin"
+
+
+# ---- single posts (FastSaver) ----
+
+import fastsaver  # noqa: E402
+
+
+@pytest.mark.parametrize("url,site", [
+    ("https://www.instagram.com/p/DRsmm9UjKfH/", "instagram"),
+    ("https://www.instagram.com/reel/ABC123/", "instagram"),
+    ("https://www.instagram.com/someone/p/ABC123/", "instagram"),
+    ("https://x.com/NASA/status/1234567890", "x"),
+    ("https://twitter.com/NASA/status/1234567890", "x"),
+    ("https://www.tiktok.com/@user/video/7300000000000000000", "tiktok"),
+    ("https://vm.tiktok.com/ZMabc123/", "tiktok"),
+    ("https://www.facebook.com/reel/123456", "facebook"),
+    ("https://fb.watch/abcDEF/", "facebook"),
+    ("https://www.instagram.com/natgeo/", None),          # profile, not a post
+    ("https://x.com/NASA", None),
+    ("https://www.reddit.com/r/pics/comments/abc/x/", None),  # gallery-dl handles it
+    ("https://evil.example/p/ABC/", None),
+])
+def test_post_site_classification(url, site):
+    assert fastsaver.post_site(url) == site
+
+
+def test_post_links_need_api_key(client, monkeypatch):
+    monkeypatch.setattr(fastsaver, "API_KEY", "")
+    r = start(client, {"links": ["https://www.instagram.com/p/ABC123/"]})
+    assert r.status_code == 400
+    assert "FASTSAVER_API_KEY" in r.get_json()["error"]
+
+
+def test_multiple_post_links_accepted(client, monkeypatch):
+    monkeypatch.setattr(fastsaver, "API_KEY", "fs_sk_test")
+    r = start(client, {"links": "https://www.instagram.com/p/ABC123/\nhttps://x.com/NASA/status/1\n\nhttps://www.instagram.com/p/ABC123/"})
+    assert r.status_code == 201
+    job = appmod.jobs[r.get_json()["id"]]
+    assert job.urls == ["https://www.instagram.com/p/ABC123/", "https://x.com/NASA/status/1"]  # duplicates dropped
+    assert r.get_json()["url"] == "2 links"
+
+
+def test_link_limits_and_line_numbers(client, monkeypatch):
+    monkeypatch.setattr(fastsaver, "API_KEY", "fs_sk_test")
+    many = "\n".join(f"https://www.instagram.com/p/A{i}/" for i in range(51))
+    assert "Up to 50" in start(client, {"links": many}).get_json()["error"]
+    r = start(client, {"links": "https://www.instagram.com/p/A1/\nfile:///etc/passwd"})
+    assert r.status_code == 400 and r.get_json()["error"].startswith("Line 2:")
+
+
+def test_run_job_with_fastsaver_album(tmp_path, monkeypatch):
+    monkeypatch.setattr(fastsaver, "API_KEY", "fs_sk_test")
+    album = {"ok": True, "id": "ABC123", "source": "instagram.com", "type": "album", "items": [
+        {"type": "image", "download_url": "https://cdn.example/a.jpg"},
+        {"type": "video", "download_url": "https://cdn.example/b.mp4"},
+        {"type": "image", "download_url": "https://cdn.example/c.jpg"},
+    ]}
+    monkeypatch.setattr(fastsaver, "fetch", lambda url: album)
+    saved = []
+
+    def fake_download(url, stem):
+        out = stem.with_suffix(".jpg")
+        out.write_bytes(b"\xff\xd8 fake")
+        saved.append(url)
+        return out
+    monkeypatch.setattr(fastsaver, "download", fake_download)
+    job = appmod.Job("o", ["https://www.instagram.com/p/ABC123/"], 50, True)
+    appmod.jobs[job.id] = job
+    real_run_job(job)  # the real one, not the fixture's stub
+    assert saved == ["https://cdn.example/a.jpg", "https://cdn.example/c.jpg"]
+    assert job.state == "done"
+    assert sorted(p.name for p in job.files()) == ["001_instagram_ABC123_01.jpg", "001_instagram_ABC123_02.jpg"]
+    assert any("skipped 1 video" in l for l in job.log)
+
+
+def test_fastsaver_errors_are_readable(monkeypatch):
+    monkeypatch.setattr(fastsaver, "API_KEY", "fs_sk_secret")
+    monkeypatch.setattr(fastsaver, "_pace", lambda: None)
+    import io
+    import urllib.error
+
+    def raise_http(code, body):
+        def _open(req, timeout=None):
+            raise urllib.error.HTTPError(req.full_url, code, "x", {}, io.BytesIO(body))
+        return _open
+    monkeypatch.setattr(fastsaver.urllib.request, "urlopen", raise_http(400, b'{"ok": false, "detail": "Insufficient credits."}'))
+    with pytest.raises(fastsaver.FastSaverError) as e:
+        fastsaver.fetch("https://www.instagram.com/p/X/")
+    assert "Insufficient credits" in str(e.value) and "fs_sk_secret" not in str(e.value)
+    monkeypatch.setattr(fastsaver.urllib.request, "urlopen", raise_http(401, b'{"ok": false}'))
+    with pytest.raises(fastsaver.FastSaverError, match="API key"):
+        fastsaver.fetch("https://www.instagram.com/p/X/")
+
+
+def test_media_downloads_refuse_private_and_plain_http(tmp_path):
+    with pytest.raises(fastsaver.FastSaverError):
+        fastsaver.download("http://cdn.example/a.jpg", tmp_path / "a")
+    with pytest.raises(fastsaver.FastSaverError):
+        fastsaver.download("https://127.0.0.1/a.jpg", tmp_path / "a")
+    with pytest.raises(fastsaver.FastSaverError):
+        fastsaver.download("https://169.254.169.254/latest/meta-data", tmp_path / "a")
+    # a redirect to a private address is refused too
+    with pytest.raises(fastsaver.FastSaverError):
+        fastsaver._SafeRedirects().redirect_request(None, None, 302, "Found", {}, "https://10.0.0.1/x.jpg")
+
+
+def test_media_from_handles_single_and_album():
+    assert fastsaver.media_from({"type": "video", "download_url": "https://a/v.mp4"}, True) == ([], 1)
+    assert fastsaver.media_from({"type": "image", "download_url": "https://a/i.jpg"}, True) == ([("image", "https://a/i.jpg")], 0)
+    assert fastsaver.media_from({"type": "album", "items": [{"url": "https://a/1.jpg", "type": "image"}, "junk"]}, False) == ([("image", "https://a/1.jpg")], 0)
+
+
+def test_bad_key_stops_the_whole_job(monkeypatch):
+    monkeypatch.setattr(fastsaver, "API_KEY", "fs_sk_test")
+    calls = []
+
+    def fail(url):
+        calls.append(url)
+        raise fastsaver.FastSaverError("FastSaver didn't accept the API key.", fatal=True)
+    monkeypatch.setattr(fastsaver, "fetch", fail)
+    job = appmod.Job("o", ["https://www.instagram.com/p/A/", "https://www.instagram.com/p/B/"], 50, True)
+    real_run_job(job)
+    assert len(calls) == 1 and job.state == "failed"

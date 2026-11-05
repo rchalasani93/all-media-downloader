@@ -11,7 +11,7 @@ const R = ctx.AMDRules;
 
 test("detects profiles per site", () => {
   assert.deepEqual({ ...R.detect("https://www.instagram.com/natgeo/") }, { site: "instagram", profile: "natgeo", mode: "api" });
-  assert.equal(R.detect("https://www.instagram.com/p/abc123/").mode, "none");
+  assert.equal(R.detect("https://www.instagram.com/explore/").mode, "none");
   assert.equal(R.detect("https://www.reddit.com/user/spez/submitted/").api, "/user/spez/submitted.json");
   assert.equal(R.detect("https://old.reddit.com/r/EarthPorn/").api, "/r/EarthPorn/new.json");
   const x = R.detect("https://x.com/NASA/media");
@@ -96,4 +96,16 @@ test("Instagram profile id from page HTML", () => {
   assert.equal(R.instagramIdFromHtml('<meta content="instagram://user?id=55555">', "x"), "55555");
   assert.equal(R.instagramIdFromHtml('"profilePage_42424242"', "x"), "42424242");
   assert.equal(R.instagramIdFromHtml('"id":"111","username":"other"', "some.user"), null);
+});
+
+test("detects single posts", () => {
+  const ig = R.detect("https://www.instagram.com/p/DRsmm9UjKfH/");
+  assert.equal(ig.mode, "post"); assert.equal(ig.code, "DRsmm9UjKfH");
+  assert.equal(R.detect("https://www.instagram.com/someone/reel/ABC/").code, "ABC");
+  const rd = R.detect("https://www.reddit.com/r/EarthPorn/comments/1abcde/some_title/");
+  assert.equal(rd.mode, "post"); assert.equal(rd.api, "/comments/1abcde.json");
+  const x = R.detect("https://x.com/NASA/status/1850000000000000000");
+  assert.equal(x.mode, "post"); assert.equal(x.statusId, "1850000000000000000");
+  assert.equal(R.detect("https://x.com/NASA/status/notanumber").mode, "scroll");
+  assert.equal(R.detect("https://www.instagram.com/natgeo/").mode, "api");
 });

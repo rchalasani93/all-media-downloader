@@ -135,9 +135,9 @@ async function poll() {
 form.addEventListener("submit", async (ev) => {
   ev.preventDefault();
   formError.hidden = true;
-  const url = $("url").value.trim();
-  if (!url) {
-    formError.textContent = "Paste a profile link first.";
+  const links = $("url").value.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (!links.length) {
+    formError.textContent = "Paste a profile or post link first.";
     formError.hidden = false;
     return;
   }
@@ -147,7 +147,7 @@ form.addEventListener("submit", async (ev) => {
     const job = await api("/api/jobs", {
       method: "POST",
       body: JSON.stringify({
-        url,
+        links,
         limit: $("limit").value || null,
         images_only: $("images-only").checked,
       }),
@@ -207,3 +207,12 @@ async function loadHistory() {
   } catch { /* first run */ }
   loadHistory();
 })();
+
+// Live count of links in the box.
+$("url").addEventListener("input", () => {
+  formError.hidden = true;
+  const n = $("url").value.split(/\r?\n/).filter((l) => l.trim()).length;
+  $("link-count").textContent = n > 1
+    ? `${n} links. Each post is downloaded in turn.`
+    : "One profile link, or up to 50 post links, one per line.";
+});

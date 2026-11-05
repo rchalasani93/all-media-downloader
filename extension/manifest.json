@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "All Media Downloader",
-  "version": "1.0.1",
-  "description": "Save every photo on a social media profile you're viewing. Uses your own login. Nothing is sent anywhere else.",
+  "version": "1.1.0",
+  "description": "Save every photo on a social media profile or post you're viewing. Uses your own login. Nothing is sent anywhere else.",
   "action": {
     "default_popup": "popup.html",
     "default_title": "Save photos from this profile",
