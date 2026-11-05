@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf }}">
+  <meta name="robots" content="noindex">
+  <title>All Media Downloader{% if env %} ({{ env }}){% endif %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="icon" href="{{ url_for('static', filename='icon.svg') }}" type="image/svg+xml">
+</head>
+<body>
+  {% if env %}<p class="env">{{ env }} environment, deployed from <code>develop</code></p>{% endif %}
+  <main>
+    <header class="masthead">
+      <div class="top">
+        <h1>All Media Downloader</h1>
+        <form method="post" action="{{ url_for('logout') }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button type="submit" class="link">Sign out</button>
+        </form>
+      </div>
+      <p>Paste a profile link to save every photo on it, or post links to save just those posts. You get a ZIP.</p>
+      <table class="support">
+        <tr><th>Whole profiles</th><td>Reddit, Tumblr, Pinterest, Flickr, Imgur, DeviantArt and
+          <a href="https://github.com/mikf/gallery-dl/blob/master/docs/supportedsites.md" target="_blank" rel="noopener noreferrer">many more</a>.
+          For Instagram and X profiles, use the <a href="https://rchalasani93.github.io/all-media-downloader/dev/#extension" target="_blank" rel="noopener noreferrer">Chrome extension</a>.</td></tr>
+        <tr><th>Single posts</th><td>All of the above, plus Instagram, X, TikTok and Facebook{% if not posts_enabled %} (not set up on this server yet){% endif %}.</td></tr>
+      </table>
+    </header>
+
+    <form id="job-form" class="sheet" autocomplete="off" novalidate>
+      <label for="url" class="lead">Profile or post links</label>
+      <div class="url-row">
+        <textarea id="url" name="links" rows="3" spellcheck="false" autocapitalize="off" required
+                  placeholder="https://www.reddit.com/user/someone/submitted/&#10;or post links, one per line:&#10;https://www.instagram.com/p/ABC123/"></textarea>
+        <button type="submit" id="start">Download photos</button>
+      </div>
+      <p class="hint" id="link-count">One profile link, or up to {{ max_links }} post links, one per line.</p>
+      <p class="error" id="form-error" role="alert" hidden></p>
+
+      <div class="options">
+        <div class="field">
+          <label for="limit">Stop after</label>
+          <div class="inline">
+            <input id="limit" name="limit" type="number" min="1" max="{{ max_files }}" step="1" placeholder="{{ max_files }}">
+            <span>files</span>
+          </div>
+          <small>Up to {{ max_files }} per download.</small>
+        </div>
+        <div class="field check">
+          <input id="images-only" name="images_only" type="checkbox" checked>
+          <label for="images-only">Photos only (skip videos)</label>
+        </div>
+      </div>
+    </form>
+
+    <section id="current" class="sheet" hidden aria-live="polite">
+      <div class="status-row">
+        <div>
+          <p class="status" id="status-text">Starting</p>
+          <p class="source" id="status-url"></p>
+        </div>
+        <div class="actions">
+          <button type="button" class="secondary" id="cancel">Stop</button>
+          <a class="button" id="zip" href="#" hidden>Download ZIP</a>
+        </div>
+      </div>
+
+      <dl class="stats">
+        <div><dt>Files</dt><dd id="stat-count">0</dd></div>
+        <div><dt>Size</dt><dd id="stat-size">0 KB</dd></div>
+        <div><dt>Time</dt><dd id="stat-time">0s</dd></div>
+      </dl>
+
+      <ol class="frames" id="frames"></ol>
+      <p class="empty" id="frames-empty">Photos appear here as they come in.</p>
+
+      <details class="log">
+        <summary>Activity log</summary>
+        <pre id="log"></pre>
+      </details>
+      <p class="folder" id="expiry"></p>
+    </section>
+
+    <section id="history-wrap" hidden>
+      <h2>Earlier downloads</h2>
+      <table class="history">
+        <thead><tr><th>Profile</th><th>Files</th><th>Result</th><th></th></tr></thead>
+        <tbody id="history"></tbody>
+      </table>
+    </section>
+
+    <footer>
+      <p>Downloads are kept on the server for {{ ttl }} minutes after they finish, then deleted. Get the ZIP before then.</p>
+      <p>Requests are spaced 1 to 2.5 seconds apart, and one download runs at a time. Please respect the people whose photos you save, and each site's terms.</p>
+    </footer>
+  </main>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

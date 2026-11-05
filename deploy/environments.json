@@ -1,0 +1,12 @@
+{
+  "dev": {
+    "branch": "develop",
+    "pages_path": "/dev/",
+    "web_url": "https://all-media-downloader-dev.onrender.com"
+  },
+  "prod": {
+    "branch": "main",
+    "pages_path": "/",
+    "web_url": ""
+  }
+}

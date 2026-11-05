@@ -1,0 +1,85 @@
+name: Test and deploy site
+
+# Download page (GitHub Pages):
+#   develop -> https://rchalasani93.github.io/all-media-downloader/dev/
+#   main    -> https://rchalasani93.github.io/all-media-downloader/
+# The website itself runs on Render (render.yaml) and deploys from develop on its own.
+# Pages hosts one site, so every run rebuilds both paths from the latest commit on each branch.
+
+on:
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r web/requirements.txt -r requirements-dev.txt
+      - name: Website tests
+        run: pytest -q tests/test_web.py
+      - name: Extension tests
+        run: |
+          for f in extension/*.js; do node --check "$f"; done
+          python -c "import json; json.load(open('extension/manifest.json'))"
+          node --test tests/rules.test.mjs
+      - name: Dependency audit
+        run: pip-audit -r web/requirements.txt
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out develop
+        uses: actions/checkout@v7
+        with:
+          ref: develop
+          path: _develop
+      - name: Check out main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          path: _main
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Build site
+        run: |
+          python _develop/scripts/build_site.py _main _site prod
+          python _develop/scripts/build_site.py _develop _site/dev dev
+          touch _site/.nojekyll
+          find _site -type f | sort
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}dev/
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

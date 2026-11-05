@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>All Media Downloader</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <h1>All Media Downloader</h1>
+    <p class="target" id="target">Checking this page</p>
+    <p class="hint" id="hint" hidden></p>
+  </header>
+
+  <form id="form">
+    <div class="row">
+      <label for="limit">Stop after</label>
+      <input id="limit" type="number" min="1" max="10000" placeholder="all"> <span>files</span>
+    </div>
+    <div class="row" id="minutes-row">
+      <label for="minutes">Scroll for up to</label>
+      <input id="minutes" type="number" min="1" max="60" value="5"> <span>min</span>
+    </div>
+    <div class="row check">
+      <input id="images-only" type="checkbox" checked>
+      <label for="images-only">Photos only (skip videos)</label>
+    </div>
+    <button type="submit" id="go">Save photos</button>
+    <p class="error" id="error" role="alert" hidden></p>
+  </form>
+
+  <section id="progress" hidden>
+    <p class="phase" id="phase"></p>
+    <dl>
+      <div><dt>Found</dt><dd id="found">0</dd></div>
+      <div><dt>Saved</dt><dd id="saved">0</dd></div>
+      <div><dt>Failed</dt><dd id="failed">0</dd></div>
+    </dl>
+    <p class="info" id="info"></p>
+    <p class="folder">Saving to <code id="folder"></code> in your Downloads folder.</p>
+    <div class="buttons">
+      <button type="button" class="secondary" id="stop">Stop</button>
+      <button type="button" class="secondary" id="open">Show files</button>
+      <button type="button" class="secondary" id="again" hidden>New download</button>
+    </div>
+  </section>
+
+  <footer>Keep this tab open while it looks for photos. You can close this popup.</footer>
+  <script src="rules.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
