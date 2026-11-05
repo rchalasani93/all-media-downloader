@@ -17,6 +17,7 @@ import json
 
 EXT_DIR = "extension"
 EXT_ZIP = "all-media-downloader-extension.zip"
+PROD_URL = "https://rchalasani93.github.io/all-media-downloader/"
 
 
 def git(src: Path, *args: str) -> str:
@@ -53,11 +54,36 @@ def build(src: Path, out: Path, env: str) -> None:
         banner, suffix = "", ""
         other = ' · <a href="dev/">Development build</a>'
 
+    # Search engines: production is indexed with a canonical URL and a sitemap; /dev/ is
+    # noindex so the preview never competes with the stable page in Google.
+    canonical = PROD_URL
+    seo = [f'<link rel="canonical" href="{canonical}">']
+    if env == "dev":
+        seo.append('<meta name="robots" content="noindex">')
+    else:
+        seo += [
+            '<meta name="robots" content="index, follow">',
+            '<meta property="og:type" content="website">',
+            '<meta property="og:site_name" content="All Media Downloader">',
+            f'<meta property="og:url" content="{canonical}">',
+            '<meta property="og:title" content="All Media Downloader">',
+            '<meta property="og:description" content="Save every photo on a social media profile: '
+            'Reddit, Tumblr, Pinterest and about 300 other sites, plus a Chrome extension for Instagram and X.">',
+            f'<meta property="og:image" content="{canonical}screenshot.png">',
+            '<meta name="twitter:card" content="summary_large_image">',
+        ]
+        (out / "sitemap.xml").write_text(
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+            f'  <url>\n    <loc>{canonical}</loc>\n  </url>\n</urlset>\n',
+            encoding="utf-8")
+
     page = (src / "site" / "index.html").read_text(encoding="utf-8")
     for key, value in {
         "{{ENV_BANNER}}": banner,
         "{{OTHER_ENV}}": other,
         "{{TITLE_SUFFIX}}": suffix,
+        "{{SEO_TAGS}}": "\n  ".join(seo),
         "{{EXT_ZIP}}": EXT_ZIP,
         "{{WEB_BUTTON}}": web_button,
         "{{COMMIT}}": html.escape(commit),
