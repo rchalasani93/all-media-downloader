@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf }}">
+  <title>Contact Sheet: profile photo downloader</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="icon" href="{{ url_for('static', filename='icon.svg') }}" type="image/svg+xml">
+</head>
+<body>
+  <main>
+    <header class="masthead">
+      <h1>Contact Sheet</h1>
+      <p>Paste a profile link and every photo on it is saved to a folder on this computer.
+         Works with Instagram, X, Reddit, Tumblr, Pinterest and
+         <a href="https://github.com/mikf/gallery-dl/blob/master/docs/supportedsites.md" target="_blank" rel="noopener noreferrer">about 300 other sites</a>.</p>
+    </header>
+
+    <form id="job-form" class="sheet" autocomplete="off" novalidate>
+      <label for="url" class="lead">Profile link</label>
+      <div class="url-row">
+        <input id="url" name="url" type="text" inputmode="url" spellcheck="false"
+               placeholder="https://www.instagram.com/natgeo/" maxlength="500" required>
+        <button type="submit" id="start">Download photos</button>
+      </div>
+      <p class="error" id="form-error" role="alert" hidden></p>
+
+      <div class="options">
+        <div class="field">
+          <label for="browser">Use my login from</label>
+          <select id="browser" name="browser">
+            <option value="">No login (public content only)</option>
+            <option value="chrome">Chrome</option>
+            <option value="firefox">Firefox</option>
+            <option value="edge">Edge</option>
+            <option value="brave">Brave</option>
+            <option value="safari">Safari</option>
+            <option value="chromium">Chromium</option>
+            <option value="opera">Opera</option>
+            <option value="vivaldi">Vivaldi</option>
+          </select>
+          <small>Instagram and X need this. Log in to the site in that browser first.</small>
+        </div>
+        <div class="field">
+          <label for="limit">Stop after</label>
+          <div class="inline">
+            <input id="limit" name="limit" type="number" min="1" max="5000" step="1" placeholder="all">
+            <span>files</span>
+          </div>
+          <small>Leave empty to get everything.</small>
+        </div>
+        <div class="field check">
+          <input id="images-only" name="images_only" type="checkbox" checked>
+          <label for="images-only">Photos only (skip videos)</label>
+        </div>
+      </div>
+    </form>
+
+    <section id="current" class="sheet" hidden aria-live="polite">
+      <div class="status-row">
+        <div>
+          <p class="status" id="status-text">Starting</p>
+          <p class="source" id="status-url"></p>
+        </div>
+        <div class="actions">
+          <button type="button" class="secondary" id="cancel">Stop</button>
+          <a class="button" id="zip" href="#" hidden>Download ZIP</a>
+          <button type="button" class="secondary" id="open" hidden>Open folder</button>
+        </div>
+      </div>
+
+      <dl class="stats">
+        <div><dt>Files</dt><dd id="stat-count">0</dd></div>
+        <div><dt>Size</dt><dd id="stat-size">0 KB</dd></div>
+        <div><dt>Time</dt><dd id="stat-time">0s</dd></div>
+      </dl>
+
+      <ol class="frames" id="frames"></ol>
+      <p class="empty" id="frames-empty">Photos appear here as they come in.</p>
+
+      <details class="log">
+        <summary>Activity log</summary>
+        <pre id="log"></pre>
+      </details>
+      <p class="folder">Saved to <code id="folder"></code></p>
+    </section>
+
+    <section id="history-wrap" hidden>
+      <h2>Earlier this session</h2>
+      <table class="history">
+        <thead><tr><th>Profile</th><th>Files</th><th>Result</th><th></th></tr></thead>
+        <tbody id="history"></tbody>
+      </table>
+    </section>
+
+    <footer>
+      <p>Everything runs on this computer at 127.0.0.1. Nothing is uploaded anywhere, and your
+         browser login is read locally only when you pick one above.</p>
+      <p>Downloads are spaced 1 to 2.5 seconds apart so sites don't flag your account. Private
+         profiles only work if your logged-in account can already see them. Please respect the
+         people whose photos you save, and each site's terms.</p>
+      <p>All files go into <code>{{ folder }}</code>.</p>
+    </footer>
+  </main>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

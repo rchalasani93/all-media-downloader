@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self'; style-src 'self'; script-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <title>All Media Downloader{{TITLE_SUFFIX}}</title>
+  <meta name="description" content="Download every photo on a social media profile to a folder on your computer. Runs locally, works with Instagram, X, Reddit, Tumblr, Pinterest and about 300 other sites.">
+  <link rel="stylesheet" href="site.css">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+</head>
+<body>
+  {{ENV_BANNER}}
+  <main>
+    <header>
+      <h1>All Media Downloader</h1>
+      <p class="lede">Paste a social media profile link and every photo on it is saved to a folder on your computer.
+        It runs on your own machine, uses your own browser login when a site needs one, and uploads nothing.</p>
+      <p class="get">
+        <a class="button" href="{{ZIP}}" download>Download the app (.zip)</a>
+        <span class="meta">Build <code>{{COMMIT}}</code> from <code>{{BRANCH}}</code>, {{BUILT}}. Needs Python 3.10 or newer.</span>
+      </p>
+    </header>
+
+    <figure>
+      <img src="screenshot.png" width="1280" height="1385" alt="The app's page: a profile link field, login and limit options, and downloaded photos shown as a film contact sheet.">
+      <figcaption>The app running at 127.0.0.1:8765 after a finished download.</figcaption>
+    </figure>
+
+    <section>
+      <h2>Set it up</h2>
+      <ol class="steps">
+        <li>Unzip the download anywhere.</li>
+        <li>Windows: double-click <code>start.bat</code>. macOS or Linux: run <code>./start.sh</code> in a terminal.</li>
+        <li>The first run installs what it needs into a private <code>.venv</code> folder, then opens <code>http://127.0.0.1:8765</code>.</li>
+        <li>Paste a profile link. For Instagram and X, log in to the site in Firefox or Chrome first and pick that browser under "Use my login from".</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>Works with</h2>
+      <table>
+        <tr><th>Instagram</th><td>Needs your browser login. Strict rate limits, so try "Stop after" on big profiles.</td></tr>
+        <tr><th>X / Twitter</th><td>Needs your browser login.</td></tr>
+        <tr><th>Reddit, Tumblr, Pinterest</th><td>Public profiles work without a login.</td></tr>
+        <tr><th>Everything else</th><td><a href="https://github.com/mikf/gallery-dl/blob/master/docs/supportedsites.md">The sites gallery-dl supports</a>, which does the downloading.</td></tr>
+      </table>
+    </section>
+
+    <section>
+      <h2>Why it isn't a website you just visit</h2>
+      <p>Social sites block downloads from cloud servers and hide most content from logged-out visitors.
+        Running on your computer means requests come from you, with your login, at a polite pace (one every 1 to 2.5 seconds).
+        Only accounts you can already see are reachable.</p>
+    </section>
+
+    <footer>
+      <p><a href="https://github.com/rchalasani93/all-media-downloader">Source on GitHub</a>{{OTHER_ENV}}</p>
+      <p>Please respect the people whose photos you save, and each site's terms.</p>
+    </footer>
+  </main>
+</body>
+</html>
