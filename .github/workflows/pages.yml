@@ -67,7 +67,7 @@ jobs:
           python _develop/scripts/build_site.py _develop _site/dev dev
           touch _site/.nojekyll
           find _site -type f | sort
-      - uses: actions/upload-pages-artifact@v4
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: _site
 
