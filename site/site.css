@@ -65,3 +65,12 @@ footer p { margin: 0 0 8px; }
   h1 { font-size: 36px; }
   th { width: 40%; }
 }
+
+.button.secondary { background: transparent; color: var(--ink); border-color: var(--ink); }
+.button.secondary:hover { background: var(--paper-2); color: var(--ink); }
+.button.disabled { background: var(--line); border-color: var(--line); color: var(--ink-2); cursor: default; }
+.get { margin-bottom: 8px; }
+header .meta { margin: 0 0 40px; }
+section p { max-width: 64ch; }
+td strong { font-weight: 600; }
+figure img.popup { width: auto; max-width: 100%; }

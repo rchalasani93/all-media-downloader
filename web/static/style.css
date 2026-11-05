@@ -165,3 +165,18 @@ footer p { margin: 0 0 10px; max-width: 70ch; }
   .history th:nth-child(3), .history td:nth-child(3) { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .status .pulse { animation: none; } }
+
+/* Hosted version additions */
+.env { background: var(--ink); color: var(--paper); font: 13px var(--mono); padding: 7px 20px; margin: 0; text-align: center; }
+.env code { background: transparent; color: inherit; padding: 0; }
+.masthead .top { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; }
+.masthead .top form { margin: 0; }
+button.link { background: none; border: 0; padding: 0; color: var(--ink-2); font-weight: 500; text-decoration: underline; text-underline-offset: 2px; }
+button.link:hover { background: none; color: var(--accent); }
+.narrow { max-width: 440px; }
+.masthead-title { font: 600 34px/1.1 var(--serif); margin: 0 0 20px; }
+.narrow input[type="password"] { font: inherit; width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 3px; background: #fff; }
+.narrow p { margin: 14px 0 0; }
+.note { font-size: 14px; color: var(--ink-2); }
+.options { grid-template-columns: 1fr 1fr; }
+.check { grid-column: auto; align-self: end; padding-bottom: 10px; }

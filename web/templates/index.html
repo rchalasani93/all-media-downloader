@@ -4,51 +4,45 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf }}">
-  <title>Contact Sheet: profile photo downloader</title>
+  <meta name="robots" content="noindex">
+  <title>All Media Downloader{% if env %} ({{ env }}){% endif %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <link rel="icon" href="{{ url_for('static', filename='icon.svg') }}" type="image/svg+xml">
 </head>
 <body>
+  {% if env %}<p class="env">{{ env }} environment, deployed from <code>develop</code></p>{% endif %}
   <main>
     <header class="masthead">
-      <h1>Contact Sheet</h1>
-      <p>Paste a profile link and every photo on it is saved to a folder on this computer.
-         Works with Instagram, X, Reddit, Tumblr, Pinterest and
-         <a href="https://github.com/mikf/gallery-dl/blob/master/docs/supportedsites.md" target="_blank" rel="noopener noreferrer">about 300 other sites</a>.</p>
+      <div class="top">
+        <h1>All Media Downloader</h1>
+        <form method="post" action="{{ url_for('logout') }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button type="submit" class="link">Sign out</button>
+        </form>
+      </div>
+      <p>Paste a profile link and the server saves every photo on it, then hands you a ZIP.
+         Works with Reddit, Tumblr, Pinterest, Flickr, Imgur, DeviantArt and
+         <a href="https://github.com/mikf/gallery-dl/blob/master/docs/supportedsites.md" target="_blank" rel="noopener noreferrer">many more sites</a>.
+         For Instagram and X, use the <a href="https://rchalasani93.github.io/all-media-downloader/dev/#extension" target="_blank" rel="noopener noreferrer">Chrome extension</a>.</p>
     </header>
 
     <form id="job-form" class="sheet" autocomplete="off" novalidate>
       <label for="url" class="lead">Profile link</label>
       <div class="url-row">
         <input id="url" name="url" type="text" inputmode="url" spellcheck="false"
-               placeholder="https://www.instagram.com/natgeo/" maxlength="500" required>
+               placeholder="https://www.reddit.com/user/someone/submitted/" maxlength="500" required>
         <button type="submit" id="start">Download photos</button>
       </div>
       <p class="error" id="form-error" role="alert" hidden></p>
 
       <div class="options">
         <div class="field">
-          <label for="browser">Use my login from</label>
-          <select id="browser" name="browser">
-            <option value="">No login (public content only)</option>
-            <option value="chrome">Chrome</option>
-            <option value="firefox">Firefox</option>
-            <option value="edge">Edge</option>
-            <option value="brave">Brave</option>
-            <option value="safari">Safari</option>
-            <option value="chromium">Chromium</option>
-            <option value="opera">Opera</option>
-            <option value="vivaldi">Vivaldi</option>
-          </select>
-          <small>Instagram and X need this. Log in to the site in that browser first.</small>
-        </div>
-        <div class="field">
           <label for="limit">Stop after</label>
           <div class="inline">
-            <input id="limit" name="limit" type="number" min="1" max="5000" step="1" placeholder="all">
+            <input id="limit" name="limit" type="number" min="1" max="{{ max_files }}" step="1" placeholder="{{ max_files }}">
             <span>files</span>
           </div>
-          <small>Leave empty to get everything.</small>
+          <small>Up to {{ max_files }} per download.</small>
         </div>
         <div class="field check">
           <input id="images-only" name="images_only" type="checkbox" checked>
@@ -66,7 +60,6 @@
         <div class="actions">
           <button type="button" class="secondary" id="cancel">Stop</button>
           <a class="button" id="zip" href="#" hidden>Download ZIP</a>
-          <button type="button" class="secondary" id="open" hidden>Open folder</button>
         </div>
       </div>
 
@@ -83,11 +76,11 @@
         <summary>Activity log</summary>
         <pre id="log"></pre>
       </details>
-      <p class="folder">Saved to <code id="folder"></code></p>
+      <p class="folder" id="expiry"></p>
     </section>
 
     <section id="history-wrap" hidden>
-      <h2>Earlier this session</h2>
+      <h2>Earlier downloads</h2>
       <table class="history">
         <thead><tr><th>Profile</th><th>Files</th><th>Result</th><th></th></tr></thead>
         <tbody id="history"></tbody>
@@ -95,12 +88,8 @@
     </section>
 
     <footer>
-      <p>Everything runs on this computer at 127.0.0.1. Nothing is uploaded anywhere, and your
-         browser login is read locally only when you pick one above.</p>
-      <p>Downloads are spaced 1 to 2.5 seconds apart so sites don't flag your account. Private
-         profiles only work if your logged-in account can already see them. Please respect the
-         people whose photos you save, and each site's terms.</p>
-      <p>All files go into <code>{{ folder }}</code>.</p>
+      <p>Downloads are kept on the server for {{ ttl }} minutes after they finish, then deleted. Get the ZIP before then.</p>
+      <p>Requests are spaced 1 to 2.5 seconds apart, and one download runs at a time. Please respect the people whose photos you save, and each site's terms.</p>
     </footer>
   </main>
   <script src="{{ url_for('static', filename='app.js') }}"></script>

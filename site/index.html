@@ -15,43 +15,56 @@
   <main>
     <header>
       <h1>All Media Downloader</h1>
-      <p class="lede">Paste a social media profile link and every photo on it is saved to a folder on your computer.
-        It runs on your own machine, uses your own browser login when a site needs one, and uploads nothing.</p>
+      <p class="lede">Save every photo on a social media profile. Use the website for Reddit, Tumblr, Pinterest and about 300 other sites,
+        or the Chrome extension for Instagram and X, which only work with your own login.</p>
       <p class="get">
-        <a class="button" href="{{ZIP}}" download>Download the app (.zip)</a>
-        <span class="meta">Build <code>{{COMMIT}}</code> from <code>{{BRANCH}}</code>, {{BUILT}}. Needs Python 3.10 or newer.</span>
+        {{WEB_BUTTON}}
+        <a class="button secondary" href="#extension">Get the Chrome extension</a>
       </p>
+      <p class="meta">Build <code>{{COMMIT}}</code> from <code>{{BRANCH}}</code>, {{BUILT}}.</p>
     </header>
 
-    <figure>
-      <img src="screenshot.png" width="1280" height="1385" alt="The app's page: a profile link field, login and limit options, and downloaded photos shown as a film contact sheet.">
-      <figcaption>The app running at 127.0.0.1:8765 after a finished download.</figcaption>
-    </figure>
-
     <section>
-      <h2>Set it up</h2>
-      <ol class="steps">
-        <li>Unzip the download anywhere.</li>
-        <li>Windows: double-click <code>start.bat</code>. macOS or Linux: run <code>./start.sh</code> in a terminal.</li>
-        <li>The first run installs what it needs into a private <code>.venv</code> folder, then opens <code>http://127.0.0.1:8765</code>.</li>
-        <li>Paste a profile link. For Instagram and X, log in to the site in Firefox or Chrome first and pick that browser under "Use my login from".</li>
-      </ol>
-    </section>
-
-    <section>
-      <h2>Works with</h2>
+      <h2>Which one to use</h2>
       <table>
-        <tr><th>Instagram</th><td>Needs your browser login. Strict rate limits, so try "Stop after" on big profiles.</td></tr>
-        <tr><th>X / Twitter</th><td>Needs your browser login.</td></tr>
-        <tr><th>Reddit, Tumblr, Pinterest</th><td>Public profiles work without a login.</td></tr>
-        <tr><th>Everything else</th><td><a href="https://github.com/mikf/gallery-dl/blob/master/docs/supportedsites.md">The sites gallery-dl supports</a>, which does the downloading.</td></tr>
+        <tr><th>Instagram, X</th><td><strong>Extension.</strong> These sites block servers and need your login, which only your browser has.</td></tr>
+        <tr><th>Reddit, Tumblr, Pinterest</th><td><strong>Either.</strong> The website gives you a ZIP. The extension saves straight to your Downloads folder.</td></tr>
+        <tr><th>Flickr, Imgur, DeviantArt and more</th><td><strong>Website.</strong> It supports <a href="https://github.com/mikf/gallery-dl/blob/master/docs/supportedsites.md">every site gallery-dl handles</a>. The extension also works on most photo sites by scrolling the page.</td></tr>
       </table>
     </section>
 
+    <section id="website">
+      <h2>The website</h2>
+      <p>Paste a profile link, wait while the server collects the photos, then download the ZIP.
+        It's password protected because it's a private tool. Files are deleted from the server an hour after each download.</p>
+      <figure>
+        <img src="screenshot.png" width="1280" height="760" alt="The website: a profile link field, a file limit, and a Download photos button.">
+        <figcaption>The website's main page.</figcaption>
+      </figure>
+    </section>
+
+    <section id="extension">
+      <h2>The Chrome extension</h2>
+      <p><a class="button" href="{{EXT_ZIP}}" download>Download the extension (.zip)</a></p>
+      <ol class="steps">
+        <li>Unzip it somewhere you'll keep it, like your Documents folder.</li>
+        <li>In Chrome, go to <code>chrome://extensions</code> and turn on <strong>Developer mode</strong> (top right).</li>
+        <li>Click <strong>Load unpacked</strong> and pick the unzipped <code>all-media-downloader-extension</code> folder.</li>
+        <li>Open a profile, for example <code>instagram.com/natgeo</code> or <code>x.com/NASA/media</code>, click the extension's icon and press <strong>Save photos</strong>.</li>
+      </ol>
+      <p>Photos go to <code>Downloads/AllMediaDownloader/&lt;site&gt;_&lt;profile&gt;/</code>.
+        If Chrome asks where to save every file, turn off "Ask where to save each file" in Chrome's download settings.
+        To update, download the new ZIP, replace the folder, and press the reload arrow on the extension's card.</p>
+      <figure>
+        <img src="extension.png" width="372" height="400" class="popup" alt="The extension popup during a download, showing found, saved and failed counts.">
+        <figcaption>The extension popup during an Instagram download.</figcaption>
+      </figure>
+    </section>
+
     <section>
-      <h2>Why it isn't a website you just visit</h2>
-      <p>Social sites block downloads from cloud servers and hide most content from logged-out visitors.
-        Running on your computer means requests come from you, with your login, at a polite pace (one every 1 to 2.5 seconds).
+      <h2>Why two tools</h2>
+      <p>Instagram and X block downloads from cloud servers and hide most content from logged-out visitors.
+        The extension runs in your browser, so requests come from you, with your login, at a polite pace.
         Only accounts you can already see are reachable.</p>
     </section>
 

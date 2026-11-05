@@ -23,6 +23,7 @@ async function api(path, options = {}) {
   });
   let body = null;
   try { body = await res.json(); } catch { /* empty body */ }
+  if (res.status === 401) { window.location.href = "/login"; throw new Error("Signed out"); }
   if (!res.ok) throw new Error((body && body.error) || `Request failed (${res.status})`);
   return body;
 }
@@ -67,13 +68,14 @@ function render(job) {
   $("stat-count").textContent = job.count;
   $("stat-size").textContent = formatBytes(job.bytes);
   $("stat-time").textContent = formatTime(job.elapsed);
-  $("folder").textContent = job.folder;
+  $("expiry").textContent = job.expires_in == null
+    ? ""
+    : `Kept on the server for ${Math.ceil(job.expires_in / 60)} more minutes.`;
 
   const running = job.state === "running";
   $("cancel").hidden = !running;
   $("zip").hidden = running || job.count === 0;
   $("zip").href = `/jobs/${job.id}/zip`;
-  $("open").hidden = job.count === 0;
 
   const frames = $("frames");
   const wanted = job.recent.join("\n");
@@ -109,10 +111,9 @@ function lastError(lines) {
   const err = [...lines].reverse().find((l) => /error|warning/i.test(l));
   if (!err) return "";
   const msg = err.replace(/^\[[^\]]*\]\[[^\]]*\]\s*/, "");
-  if (/login|log in|authenticat|401|403/i.test(msg)) return "the site wants a login. Pick your browser under \"Use my login from\".";
+  if (/login|log in|authenticat|401|403/i.test(msg)) return "the site wants a login or blocks servers. Try the Chrome extension.";
   if (/unsupported url/i.test(msg)) return "this site or link type isn't supported.";
   if (/429|rate/i.test(msg)) return "the site is rate limiting. Wait a few minutes and try again.";
-  if (/cookies/i.test(msg)) return "couldn't read that browser's login. Close the browser and try again.";
   return msg.slice(0, 160);
 }
 
@@ -147,7 +148,6 @@ form.addEventListener("submit", async (ev) => {
       method: "POST",
       body: JSON.stringify({
         url,
-        browser: $("browser").value,
         limit: $("limit").value || null,
         images_only: $("images-only").checked,
       }),
@@ -169,11 +169,6 @@ form.addEventListener("submit", async (ev) => {
 $("cancel").addEventListener("click", async () => {
   if (!activeId) return;
   try { render(await api(`/api/jobs/${activeId}/cancel`, { method: "POST" })); } catch { /* next poll catches up */ }
-});
-
-$("open").addEventListener("click", async () => {
-  if (!activeId) return;
-  try { await api(`/api/jobs/${activeId}/open`, { method: "POST" }); } catch (e) { alert(e.message); }
 });
 
 async function loadHistory() {

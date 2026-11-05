@@ -1,0 +1,27 @@
+# Render Blueprint. In Render: New > Blueprint > pick this repo.
+# The dev environment deploys automatically on every push to develop.
+services:
+  - type: web
+    name: all-media-downloader-dev
+    runtime: python
+    plan: free
+    branch: develop
+    rootDir: web
+    buildCommand: pip install -r requirements.txt
+    # One worker: job state lives in memory. Threads handle concurrent page requests.
+    startCommand: gunicorn app:app --workers 1 --threads 8 --timeout 120 --bind 0.0.0.0:$PORT
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.8"
+      - key: ENV_LABEL
+        value: dev
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ACCESS_PASSWORD
+        sync: false   # Render asks you for this when you create the Blueprint
+      - key: MAX_FILES_PER_JOB
+        value: "500"
+      - key: JOB_TTL_MINUTES
+        value: "60"

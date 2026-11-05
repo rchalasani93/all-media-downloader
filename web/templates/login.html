@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Sign in: All Media Downloader</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="icon" href="{{ url_for('static', filename='icon.svg') }}" type="image/svg+xml">
+</head>
+<body>
+  {% if env %}<p class="env">{{ env }} environment, deployed from <code>develop</code></p>{% endif %}
+  <main class="narrow">
+    <h1 class="masthead-title">All Media Downloader</h1>
+    <form method="post" class="sheet" action="{{ url_for('login') }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label for="password" class="lead">Access password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required autofocus>
+      {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+      <p><button type="submit">Sign in</button></p>
+    </form>
+    <p class="note">This is a private tool. The password is the <code>ACCESS_PASSWORD</code> set on the server.</p>
+  </main>
+</body>
+</html>
