@@ -15,7 +15,7 @@ Download page: **https://rchalasani93.github.io/all-media-downloader/dev/** (bui
 
 | Branch | Download page (GitHub Pages) | Website (Render) |
 |---|---|---|
-| `develop` | `/all-media-downloader/dev/` | service `all-media-downloader-dev` from `render.yaml` |
+| `develop` | `/all-media-downloader/dev/` | https://all-media-downloader-dev.onrender.com (`render.yaml`) |
 | `main` | `/all-media-downloader/` | not set up yet |
 
 Every push to `main` or `develop` runs the website tests, the extension tests and a dependency audit. The download page is then rebuilt from both branches (`.github/workflows/pages.yml`). Render deploys the website on its own whenever `develop` changes.
