@@ -132,5 +132,35 @@
     return [];
   }
 
-  root.AMDRules = { detect, upgrade, extFromUrl, safeName, instagramItemUrls, redditPostUrls };
+  // Instagram post shortcode (the part after /p/) -> numeric media id, as a string.
+  const IG_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+  function shortcodeToId(code) {
+    const clean = String(code || "").slice(0, 11); // longer codes carry a suffix that isn't part of the id
+    if (!/^[A-Za-z0-9_-]+$/.test(clean)) return null;
+    let id = 0n;
+    for (const ch of clean) id = id * 64n + BigInt(IG_ALPHABET.indexOf(ch));
+    return id.toString();
+  }
+
+  // Find the profile's numeric id in the HTML/JSON Instagram embeds in the page.
+  function instagramIdFromHtml(htmlText, username) {
+    const u = String(username).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const patterns = [
+      new RegExp(`"id":"(\\d{3,})","username":"${u}"`, "i"),
+      new RegExp(`"username":"${u}"[^{}]{0,400}?"(?:pk|id|pk_id)":"?(\\d{3,})`, "i"),
+      /"profilePage_(\d{3,})"/,
+      /"profile_id":"?(\d{3,})/,
+      /"target_id":"?(\d{3,})/,
+      /instagram:\/\/user\?id=(\d{3,})/,
+    ];
+    for (const re of patterns) {
+      const m = htmlText.match(re);
+      if (m) return m[1];
+    }
+    return null;
+  }
+
+  root.AMDRules = {
+    detect, upgrade, extFromUrl, safeName, instagramItemUrls, redditPostUrls, shortcodeToId, instagramIdFromHtml,
+  };
 })(typeof globalThis !== "undefined" ? globalThis : this);

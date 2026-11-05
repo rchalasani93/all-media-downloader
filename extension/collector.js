@@ -30,34 +30,152 @@
     return m ? decodeURIComponent(m[1]) : "";
   }
 
-  async function instagram(target, opts) {
-    const headers = { "x-ig-app-id": "936619743392459", "x-requested-with": "XMLHttpRequest", "x-csrftoken": cookie("csrftoken") };
-    const info = await fetch(`/api/v1/users/web_profile_info/?username=${encodeURIComponent(target.profile)}`, { headers, credentials: "include" });
-    if (info.status === 401 || info.status === 403) throw new Error("Instagram wants you logged in. Log in and try again.");
-    if (info.status === 429) throw new Error("Instagram is rate limiting. Wait 15 minutes.");
-    if (!info.ok) throw new Error(`Couldn't load the profile (${info.status}).`);
-    const user = (await info.json()).data.user;
-    if (user.is_private && !user.followed_by_viewer) throw new Error("This account is private and you don't follow it.");
-    report([], `${user.edge_owner_to_timeline_media ? user.edge_owner_to_timeline_media.count : "?"} posts on profile`);
+  // ---------- Instagram ----------
+  // Instagram's web endpoints change often, so this tries several ways in order and
+  // records what happened, so a failure says which step broke.
 
+  function igHeaders() {
+    let claim = "0";
+    try { claim = sessionStorage.getItem("www-claim-v2") || "0"; } catch { /* storage blocked */ }
+    return {
+      "x-ig-app-id": "936619743392459",
+      "x-asbd-id": "359341",
+      "x-ig-www-claim": claim,
+      "x-csrftoken": cookie("csrftoken"),
+      "x-requested-with": "XMLHttpRequest",
+      "accept": "*/*",
+    };
+  }
+
+  async function igGet(path) {
+    const res = await fetch(path, { headers: igHeaders(), credentials: "include" });
+    let body = null;
+    if (res.ok) {
+      try { body = await res.json(); } catch { body = null; }
+    }
+    return { status: res.status, ok: res.ok && body !== null, body };
+  }
+
+  async function igUserId(username, notes) {
+    const r = await igGet(`/api/v1/users/web_profile_info/?username=${encodeURIComponent(username)}`);
+    notes.push(`profile info ${r.status}`);
+    if (r.status === 401) throw new Error("Instagram wants you logged in. Log in and try again.");
+    if (r.ok && r.body.data && r.body.data.user) {
+      const u = r.body.data.user;
+      if (u.is_private && !u.followed_by_viewer) throw new Error("This account is private and you don't follow it.");
+      return u.id;
+    }
+    // The profile page itself carries the id in its embedded JSON.
+    const fromDom = R.instagramIdFromHtml(document.documentElement.innerHTML, username);
+    if (fromDom) { notes.push("id from page"); return fromDom; }
+    try {
+      const page = await fetch(`/${encodeURIComponent(username)}/`, { credentials: "include" });
+      const id = R.instagramIdFromHtml(await page.text(), username);
+      notes.push(`page html ${page.status}${id ? " (id found)" : ""}`);
+      return id;
+    } catch {
+      notes.push("page html failed");
+      return null;
+    }
+  }
+
+  async function igFeed(userId, opts, notes) {
     let maxId = "";
     let total = 0;
+    let pages = 0;
     while (!stopped && total < opts.limit) {
       const q = new URLSearchParams({ count: "33" });
       if (maxId) q.set("max_id", maxId);
-      const res = await fetch(`/api/v1/feed/user/${user.id}/?${q}`, { headers, credentials: "include" });
-      if (res.status === 429) { report([], "Rate limited. Pausing 60 seconds."); await sleep(60000); continue; }
-      if (!res.ok) throw new Error(`Instagram stopped answering (${res.status}). Saved what was found.`);
-      const page = await res.json();
+      const r = await igGet(`/api/v1/feed/user/${userId}/?${q}`);
+      if (r.status === 429) { report([], "Rate limited. Pausing 60 seconds."); await sleep(60000); continue; }
+      if (!r.ok) {
+        notes.push(`feed ${r.status}`);
+        return pages > 0 ? total : -1; // -1 = feed unusable, try the grid
+      }
+      pages++;
       const urls = [];
-      for (const item of page.items || []) {
+      for (const item of r.body.items || []) {
         for (const url of R.instagramItemUrls(item, opts.imagesOnly)) urls.push({ url, fallback: null });
       }
-      total += report(urls.slice(0, opts.limit - total));
-      if (!page.more_available || !page.next_max_id) break;
-      maxId = page.next_max_id;
+      total += report(urls.slice(0, opts.limit - total), `Reading the feed, page ${pages}`);
+      if (!r.body.more_available || !r.body.next_max_id) break;
+      maxId = r.body.next_max_id;
       await jitter(1500, 3000);
     }
+    return total;
+  }
+
+  function gridPosts() {
+    const out = [];
+    for (const a of document.querySelectorAll('main a[href*="/p/"], main a[href*="/reel/"]')) {
+      const m = a.getAttribute("href").match(/\/(p|reel)\/([A-Za-z0-9_-]+)/);
+      if (!m) continue;
+      const img = a.querySelector("img");
+      out.push({ code: m[2], reel: m[1] === "reel", thumb: img ? biggestSrc(img) : null });
+    }
+    return out;
+  }
+
+  // Scroll the profile grid, then load each post's full-size media.
+  async function igGrid(opts, notes) {
+    const posts = new Map();
+    const deadline = Date.now() + opts.minutes * 60000;
+    let idle = 0;
+    while (!stopped && posts.size < opts.limit && Date.now() < deadline && idle < 6) {
+      const before = posts.size;
+      for (const p of gridPosts()) if (!posts.has(p.code)) posts.set(p.code, p);
+      report([], `Scrolling the profile: ${posts.size} posts found`);
+      window.scrollBy(0, Math.round(window.innerHeight * 0.9));
+      await jitter(1500, 2500);
+      idle = posts.size === before ? idle + 1 : 0;
+    }
+    window.scrollTo(0, 0);
+
+    let total = 0;
+    let n = 0;
+    let infoWorks = true;
+    let misses = 0;
+    for (const p of posts.values()) {
+      if (stopped || total >= opts.limit) break;
+      n++;
+      if (p.reel && opts.imagesOnly) continue;
+      let urls = [];
+      if (infoWorks) {
+        const id = R.shortcodeToId(p.code);
+        const r = id ? await igGet(`/api/v1/media/${id}/info/`) : { status: 0, ok: false };
+        if (r.status === 429) { report([], "Rate limited. Pausing 60 seconds."); await sleep(60000); }
+        if (r.ok && r.body.items && r.body.items[0]) {
+          urls = R.instagramItemUrls(r.body.items[0], opts.imagesOnly);
+          misses = 0;
+        } else if (++misses >= 3) {
+          notes.push(`post info ${r.status}`);
+          infoWorks = false; // three misses in a row: stop asking, use the grid images
+        }
+        await jitter(1200, 2200);
+      }
+      if (!urls.length && p.thumb) {
+        const up = R.upgrade(p.thumb);
+        if (up) urls = [up.url];
+      }
+      total += report(urls.slice(0, opts.limit - total).map((url) => ({ url, fallback: null })),
+        `Loading posts: ${n} of ${posts.size}${infoWorks ? "" : " (grid-size images)"}`);
+    }
+    return total;
+  }
+
+  async function instagram(target, opts) {
+    const notes = [];
+    const userId = await igUserId(target.profile, notes);
+    let got = -1;
+    if (userId) got = await igFeed(userId, opts, notes);
+    if (got < 0 && !stopped) {
+      report([], "Feed unavailable, reading the profile grid instead");
+      got = await igGrid(opts, notes);
+    }
+    if (got <= 0 && !stopped) {
+      throw new Error(`No photos found. Steps tried: ${notes.join(", ")}. Make sure you're logged in and the profile grid shows posts.`);
+    }
+    if (notes.length) report([], `Done. Steps: ${notes.join(", ")}`);
   }
 
   async function reddit(target, opts) {

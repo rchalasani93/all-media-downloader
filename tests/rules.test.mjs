@@ -80,3 +80,20 @@ test("Reddit posts: direct images, galleries in order, previews", () => {
   assert.deepEqual([...R.redditPostUrls(gallery, true)], ["https://preview.redd.it/b.jpg?s=y", "https://preview.redd.it/a.jpg?width=1&s=x"]);
   assert.deepEqual([...R.redditPostUrls({ data: { url: "https://www.youtube.com/watch?v=1" } }, true)], []);
 });
+
+test("Instagram shortcode to media id", () => {
+  assert.equal(R.shortcodeToId("B"), "1");
+  assert.equal(R.shortcodeToId("BAA"), "4096");
+  assert.equal(R.shortcodeToId("_"), "63");
+  assert.equal(R.shortcodeToId("AAAAAAAAAAB"), "1");
+  assert.equal(R.shortcodeToId("AAAAAAAAAABextra"), "1"); // suffix after 11 chars ignored
+  assert.equal(R.shortcodeToId("bad/code"), null);
+});
+
+test("Instagram profile id from page HTML", () => {
+  assert.equal(R.instagramIdFromHtml('..."id":"123456789","username":"some.user"...', "some.user"), "123456789");
+  assert.equal(R.instagramIdFromHtml('{"username":"some.user","full_name":"x","pk":"987654321"}', "some.user"), "987654321");
+  assert.equal(R.instagramIdFromHtml('<meta content="instagram://user?id=55555">', "x"), "55555");
+  assert.equal(R.instagramIdFromHtml('"profilePage_42424242"', "x"), "42424242");
+  assert.equal(R.instagramIdFromHtml('"id":"111","username":"other"', "some.user"), null);
+});
