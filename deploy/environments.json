@@ -7,6 +7,6 @@
   "prod": {
     "branch": "main",
     "pages_path": "/",
-    "web_url": "https://all-media-downloader-dev.onrender.com"
+    "web_url": ""
   }
 }
