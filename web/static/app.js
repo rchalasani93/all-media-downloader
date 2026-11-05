@@ -108,9 +108,9 @@ function render(job) {
 
 // Turn gallery-dl's error lines into one short, readable reason.
 function lastError(lines) {
-  const err = [...lines].reverse().find((l) => /error|warning/i.test(l));
+  const err = [...lines].reverse().find((l) => /error|warning|^\[post \d+\]/i.test(l) && !/^Stopped:/.test(l));
   if (!err) return "";
-  const msg = err.replace(/^\[[^\]]*\]\[[^\]]*\]\s*/, "");
+  const msg = err.replace(/^\[[^\]]*\]\[[^\]]*\]\s*/, "").replace(/^\[post \d+\]\s*/, "");
   if (/login|log in|authenticat|401|403/i.test(msg)) return "the site wants a login or blocks servers. Try the Chrome extension.";
   if (/unsupported url/i.test(msg)) return "this site or link type isn't supported.";
   if (/429|rate/i.test(msg)) return "the site is rate limiting. Wait a few minutes and try again.";

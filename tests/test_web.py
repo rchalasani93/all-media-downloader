@@ -332,3 +332,20 @@ def test_bad_key_stops_the_whole_job(monkeypatch):
     job = appmod.Job("o", ["https://www.instagram.com/p/A/", "https://www.instagram.com/p/B/"], 50, True)
     real_run_job(job)
     assert len(calls) == 1 and job.state == "failed"
+
+
+def test_tracking_params_are_stripped(client, monkeypatch):
+    monkeypatch.setattr(fastsaver, "API_KEY", "fs_sk_test")
+    raw = "https://www.instagram.com/p/DfXLNycCdAx/?utm_source=ig_web_copy_link&mdxt=MzRl&srtk=MzRl&igsh=abc"
+    r = start(client, {"links": raw})
+    assert r.status_code == 201
+    assert appmod.jobs[r.get_json()["id"]].urls == ["https://www.instagram.com/p/DfXLNycCdAx/"]
+    assert fastsaver.clean_url("https://x.com/a/status/1?s=20&t=abc&keep=1") == "https://x.com/a/status/1?keep=1"
+
+
+def test_sniffs_media_type_from_bytes():
+    assert fastsaver.sniff_ext(b"\xff\xd8\xff\xe0rest") == "jpg"
+    assert fastsaver.sniff_ext(b"\x89PNG\r\n\x1a\n....") == "png"
+    assert fastsaver.sniff_ext(b"RIFF\x00\x00\x00\x00WEBPVP8 ") == "webp"
+    assert fastsaver.sniff_ext(b"\x00\x00\x00\x18ftypmp42") == "mp4"
+    assert fastsaver.sniff_ext(b"<html><script>") is None

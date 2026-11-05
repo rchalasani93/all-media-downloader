@@ -52,6 +52,16 @@ _POST_PATTERNS = [
 ]
 
 
+_TRACKING = re.compile(r"^(utm_\w+|igsh|igshid|mdxt|srtk|img_index|fbclid|si|s|t|ref|ref_src|ref_url|is_from_webapp|sender_device|_r|_t|mibextid|rdid|share_url|sfnsn)$", re.I)
+
+
+def clean_url(url: str) -> str:
+    """Drop share/tracking parameters (Instagram's copy-link adds several) and the fragment."""
+    p = urllib.parse.urlparse(url)
+    keep = [(k, v) for k, v in urllib.parse.parse_qsl(p.query, keep_blank_values=True) if not _TRACKING.match(k)]
+    return urllib.parse.urlunparse(p._replace(query=urllib.parse.urlencode(keep), fragment=""))
+
+
 def post_site(url: str) -> str | None:
     """Return the site name if this is a single-post link FastSaver should handle."""
     p = urllib.parse.urlparse(url)
@@ -97,23 +107,48 @@ _EXT_BY_TYPE = {
 }
 
 
+def sniff_ext(head: bytes) -> str | None:
+    """Recognise common media formats from their first bytes."""
+    if head.startswith(b"\xff\xd8\xff"):
+        return "jpg"
+    if head.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "png"
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return "webp"
+    if head[:6] in (b"GIF87a", b"GIF89a"):
+        return "gif"
+    if head[4:8] == b"ftyp":
+        brand = head[8:12]
+        if brand in (b"avif", b"avis"):
+            return "avif"
+        if brand in (b"heic", b"heix", b"mif1"):
+            return "heic"
+        return "mp4"
+    if head.startswith(b"\x1aE\xdf\xa3"):
+        return "webm"
+    return None
+
+
 def download(url: str, dest_stem: Path) -> Path:
     """Download one media file to dest_stem.<ext>. Returns the saved path."""
     _check_url(url)
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "image/*,video/*,*/*;q=0.5"})
     try:
         with _opener.open(req, timeout=TIMEOUT) as resp:
             ctype = (resp.headers.get("Content-Type") or "").split(";")[0].strip().lower()
-            ext = _EXT_BY_TYPE.get(ctype)
-            if not ext:
-                raise FastSaverError(f"Skipped a file of type '{ctype or 'unknown'}'.")
             length = int(resp.headers.get("Content-Length") or 0)
             if length > MAX_FILE_BYTES:
                 raise FastSaverError("Skipped a file over the size limit.")
+            first = resp.read(256 * 1024)
+            # Trust the file's own bytes first; fall back to the declared type.
+            ext = sniff_ext(first[:16]) or _EXT_BY_TYPE.get(ctype)
+            if not ext:
+                raise FastSaverError(f"Skipped a file that isn't an image or video (type '{ctype or 'unknown'}').")
             out = dest_stem.with_suffix("." + ext)
             part = out.with_suffix(out.suffix + ".part")
-            total = 0
+            total = len(first)
             with open(part, "wb") as fh:
+                fh.write(first)
                 while chunk := resp.read(256 * 1024):
                     total += len(chunk)
                     if total > MAX_FILE_BYTES:
@@ -125,9 +160,7 @@ def download(url: str, dest_stem: Path) -> Path:
             return out
     except urllib.error.HTTPError as e:
         raise FastSaverError(f"The media server answered {e.code}.") from None
-    except (urllib.error.URLError, TimeoutError, OSError) as e:
-        if isinstance(e, FastSaverError):
-            raise
+    except (urllib.error.URLError, TimeoutError, OSError):
         raise FastSaverError("Couldn't reach the media server.") from None
 
 

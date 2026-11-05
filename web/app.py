@@ -170,6 +170,7 @@ def validate_url(raw: object) -> str:
     if p.username or p.password:
         raise ValueError("Links with a username or password in them aren't allowed.")
     if fastsaver.post_site(url):
+        url = fastsaver.clean_url(url)
         if not fastsaver.enabled():
             raise ValueError("Single Instagram, X, TikTok and Facebook posts need FASTSAVER_API_KEY set on the server.")
     else:
@@ -278,10 +279,14 @@ def run_fastsaver(job: Job, url: str, index: int, remaining: int) -> int:
             saved += 1
         except fastsaver.FastSaverError as e:
             add_log(job, f"[post {index}] {e}")
+            log.warning("job %s post %s media download failed: %s (host %s)", job.id[:8], index, e,
+                        urlparse(media_url).hostname)
     if skipped:
         add_log(job, f"[post {index}] skipped {skipped} video(s) (Photos only is on)")
     if not media and not skipped:
         add_log(job, f"[post {index}] no media found in that post")
+        log.warning("job %s post %s: FastSaver ok but no media (type=%r, keys=%s)", job.id[:8], index,
+                    body.get("type"), sorted(body.keys())[:15])
     return saved
 
 
@@ -305,6 +310,7 @@ def run_job(job: Job) -> None:
                 except fastsaver.FastSaverError as e:
                     failures += 1
                     add_log(job, f"[post {index}] {e}")
+                    log.warning("job %s post %s failed: %s", job.id[:8], index, e)
                     if e.fatal:
                         add_log(job, "Stopped: the remaining post links would fail the same way.")
                         break
